@@ -1,0 +1,14 @@
+# OPTIONAL: only if `oc auth can-i create servicemonitors.monitoring.coreos.com` answers yes.
+# The platform Prometheus then scrapes /metrics and shows it under Observe -> Metrics.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: eshop
+  labels: { app.kubernetes.io/part-of: eshop }
+spec:
+  selector:
+    matchLabels: { app.kubernetes.io/part-of: eshop }
+  endpoints:
+  - port: 8080-tcp              # the port name in the services' Service
+    path: /metrics
+    interval: 30s

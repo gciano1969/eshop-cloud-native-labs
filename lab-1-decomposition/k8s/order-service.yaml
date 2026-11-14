@@ -1,0 +1,87 @@
+# order-service: ImageStream, BuildConfig (S2I from this repository), Deployment, Service.
+# Reference manifests, equivalent to what `oc new-app` + the `oc set ...` commands of the guide produce.
+# Replace <your-github-user> before applying. The order-db Secret is created by the
+# postgresql-persistent template and is NOT stored in Git.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: order-service
+  labels: { app: order-service, app.kubernetes.io/part-of: eshop }
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: order-service
+  labels: { app: order-service, app.kubernetes.io/part-of: eshop }
+spec:
+  source:
+    type: Git
+    git: { uri: https://github.com/<your-github-user>/eshop-cloud-native-labs, ref: main }
+    contextDir: lab-1-decomposition/order-service
+  strategy:
+    type: Source
+    sourceStrategy:
+      from: { kind: ImageStreamTag, namespace: openshift, name: "nodejs:22-ubi9" }
+  output:
+    to: { kind: ImageStreamTag, name: "order-service:latest" }
+  triggers:
+    - type: ConfigChange
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  labels: { app: order-service, app.kubernetes.io/part-of: eshop }
+  annotations:
+    # Rolls out a new Pod every time the build pushes a new order-service:latest
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"order-service:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"order-service\")].image"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { deployment: order-service }
+  template:
+    metadata:
+      labels: { deployment: order-service, app: order-service }
+    spec:
+      containers:
+        - name: order-service
+          image: order-service:latest
+          ports: [{ containerPort: 8080, protocol: TCP }]
+          env:
+            - { name: DB_HOST, value: order-db }
+            - { name: DB_PORT, value: "5432" }
+            # Server-side service discovery: the Service name, never an IP
+            - { name: CATALOG_URL, value: "http://catalog-service:8080" }
+            # Only order-db credentials: this service never sees catalog-db
+            - { name: DB_DATABASE_NAME, valueFrom: { secretKeyRef: { name: order-db, key: database-name } } }
+            - { name: DB_DATABASE_USER, valueFrom: { secretKeyRef: { name: order-db, key: database-user } } }
+            - { name: DB_DATABASE_PASSWORD, valueFrom: { secretKeyRef: { name: order-db, key: database-password } } }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 250m, memory: 256Mi }
+          readinessProbe:
+            httpGet: { path: /health, port: 8080 }
+            initialDelaySeconds: 5
+          livenessProbe:
+            tcpSocket: { port: 8080 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  labels: { app: order-service, app.kubernetes.io/part-of: eshop }
+spec:
+  selector: { deployment: order-service }
+  ports:
+    - { name: 8080-tcp, port: 8080, targetPort: 8080 }
+---
+# Only order-service is exposed outside the cluster: it is the entry point for the customer.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: order-service
+  labels: { app: order-service, app.kubernetes.io/part-of: eshop }
+spec:
+  to: { kind: Service, name: order-service }
+  port: { targetPort: 8080-tcp }
+  tls: { termination: edge, insecureEdgeTerminationPolicy: Redirect }

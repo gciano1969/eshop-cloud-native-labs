@@ -1,0 +1,52 @@
+# A minimal GitOps reconciler: every 5 minutes, clone the repository and `oc apply -k` the overlay.
+# Apply once by hand, then it runs on its own:
+#   oc apply -f k8s/reconciler.yaml
+#   oc policy add-role-to-user edit -z reconciler       # edit role ONLY in this namespace
+# Replace <your-github-user> before applying. The repository must be public (no credentials).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reconciler
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: reconciler
+  labels: { app.kubernetes.io/part-of: eshop }
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid           # never two rounds at the same time
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 240
+      template:
+        spec:
+          serviceAccountName: reconciler
+          restartPolicy: Never
+          volumes: [{ name: work, emptyDir: {} }]
+          initContainers:
+            - name: git
+              image: registry.access.redhat.com/ubi9/nodejs-22:latest     # it ships git
+              env:
+                - { name: GIT_URL, value: https://github.com/<your-github-user>/eshop-cloud-native-labs }
+                - { name: GIT_REF, value: main }
+                - { name: HOME, value: /tmp }
+              command: [bash, -ec]
+              args:
+                - |
+                  git clone --quiet --depth 1 --branch "$GIT_REF" "$GIT_URL" /work/repo
+                  echo "commit: $(git -C /work/repo rev-parse --short HEAD)"
+              volumeMounts: [{ name: work, mountPath: /work }]
+              resources: { requests: { cpu: 20m, memory: 64Mi }, limits: { cpu: 200m, memory: 256Mi } }
+          containers:
+            - name: apply
+              image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+              command: [bash, -c]
+              args:
+                - |
+                  oc apply -k /work/repo/lab-4-saga-gitops/k8s/overlays/sandbox
+              volumeMounts: [{ name: work, mountPath: /work }]
+              resources: { requests: { cpu: 20m, memory: 64Mi }, limits: { cpu: 200m, memory: 256Mi } }

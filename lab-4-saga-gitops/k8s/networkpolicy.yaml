@@ -1,0 +1,105 @@
+# OPTIONAL (Step 7). Who may talk to whom inside the namespace. Network policies add up:
+# if the namespace already has a policy that allows all same-namespace traffic, these rules
+# have no visible effect. Check the real Pod labels first: oc get pods --show-labels
+#
+# 1. no ingress at all, for every Pod in the namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny }
+spec:
+  podSelector: {}
+  policyTypes: [ Ingress ]
+---
+# 2. the OpenShift router reaches order-service (the Route)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: order-from-router }
+spec:
+  podSelector: { matchLabels: { deployment: order-service } }
+  ingress:
+  - from:
+    - namespaceSelector: { matchLabels: { policy-group.network.openshift.io/ingress: "" } }
+    ports: [ { port: 8080 } ]
+---
+# 3. catalog-service only from order-service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: catalog-from-order }
+spec:
+  podSelector: { matchLabels: { deployment: catalog-service } }
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { deployment: order-service } }
+    ports: [ { port: 8080 } ]
+---
+# 4. Kafka only from the services that produce or consume
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: kafka-from-services }
+spec:
+  podSelector: { matchLabels: { app: kafka } }
+  ingress:
+  - from:
+    - podSelector: { matchLabels: { deployment: order-service } }
+    - podSelector: { matchLabels: { deployment: notification-service } }
+    ports: [ { port: 9092 } ]
+---
+# 5-7. each database only from its owner (the postgresql-persistent template labels the Pod name=<db>)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: order-db-from-order }
+spec:
+  podSelector: { matchLabels: { name: order-db } }
+  ingress:
+  - from: [ { podSelector: { matchLabels: { deployment: order-service } } } ]
+    ports: [ { port: 5432 } ]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: catalog-db-from-catalog }
+spec:
+  podSelector: { matchLabels: { name: catalog-db } }
+  ingress:
+  - from: [ { podSelector: { matchLabels: { deployment: catalog-service } } } ]
+    ports: [ { port: 5432 } ]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: notification-db-from-notification }
+spec:
+  podSelector: { matchLabels: { name: notification-db } }
+  ingress:
+  - from: [ { podSelector: { matchLabels: { deployment: notification-service } } } ]
+    ports: [ { port: 5432 } ]
+---
+# 8. platform monitoring scrapes /metrics on every service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: services-from-monitoring }
+spec:
+  podSelector:
+    matchExpressions:
+    - { key: deployment, operator: In, values: [ order-service, catalog-service, notification-service, payment-service ] }
+  ingress:
+  - from:
+    - namespaceSelector: { matchLabels: { network.openshift.io/policy-group: monitoring } }
+    ports: [ { port: 8080 } ]
+---
+# Lab 4: payment-service is a new Pod: allow it to reach its database and Kafka
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: payment-db-from-payment }
+spec:
+  podSelector: { matchLabels: { name: payment-db } }
+  ingress:
+  - from: [ { podSelector: { matchLabels: { deployment: payment-service } } } ]
+    ports: [ { port: 5432 } ]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: kafka-from-payment }
+spec:
+  podSelector: { matchLabels: { app: kafka } }
+  ingress:
+  - from: [ { podSelector: { matchLabels: { deployment: payment-service } } } ]
+    ports: [ { port: 9092 } ]

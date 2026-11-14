@@ -1,0 +1,26 @@
+# payment-service build: ImageStream and BuildConfig only. The Deployment and Service live in
+# base/ and are applied by the reconciler. The BuildConfig has NO image-change trigger towards the
+# Deployment: which image runs is decided by the tag in overlays/sandbox, i.e. by Git.
+# Replace <your-github-user> before applying.
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: payment-service
+  labels: { app: payment-service, app.kubernetes.io/part-of: eshop }
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: payment-service
+  labels: { app: payment-service, app.kubernetes.io/part-of: eshop }
+spec:
+  source:
+    type: Git
+    git: { uri: https://github.com/<your-github-user>/eshop-cloud-native-labs, ref: main }
+    contextDir: lab-4-saga-gitops/payment-service
+  strategy:
+    type: Source
+    sourceStrategy:
+      from: { kind: ImageStreamTag, namespace: openshift, name: "nodejs:22-ubi9" }
+  output:
+    to: { kind: ImageStreamTag, name: "payment-service:latest" }

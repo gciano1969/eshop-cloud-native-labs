@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-config
+  labels: { app.kubernetes.io/part-of: eshop }
+data:
+  OTEL_SERVICE_NAME: catalog-service
+  LOG_LEVEL: info
+  DB_HOST: catalog-db
+  DB_PORT: "5432"
+  CATALOG_DELAY_MS: "0"          # injectable delay for the verifications: 0 = off

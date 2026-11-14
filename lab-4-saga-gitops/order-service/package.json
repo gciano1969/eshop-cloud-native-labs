@@ -1,0 +1,26 @@
+{
+  "name": "order-service",
+  "version": "1.0.0",
+  "private": true,
+  "description": "E-Shop order service (Lab 4)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --require ./tracing.js server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@confluentinc/kafka-javascript": "^1.11.0",
+    "@opentelemetry/api": "^1.10.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.83.0",
+    "@opentelemetry/sdk-node": "^0.301.2",
+    "@opentelemetry/sdk-trace": "^3.1.1",
+    "express": "^5.1.0",
+    "opossum": "^10.0.0",
+    "pg": "^8.16.0",
+    "pino": "^10.0.0",
+    "prom-client": "^15.1.3"
+  }
+}

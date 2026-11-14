@@ -1,0 +1,139 @@
+openapi: 3.1.0
+info:
+  title: E-Shop — catalog-service and order-service (Lab 1)
+  version: 1.0.0
+  description: >
+    Minimal REST contract of the two services. catalog-service is internal to the cluster;
+    order-service is exposed through an OpenShift Route.
+servers:
+  - url: http://catalog-service:8080
+    description: catalog-service (inside the namespace)
+  - url: https://order-service-<namespace>.<cluster-domain>
+    description: order-service (Route)
+paths:
+  /health:
+    get:
+      summary: Readiness probe (both services)
+      responses:
+        "200": { description: The service and its database answer }
+        "503": { description: The database does not answer }
+  /products:
+    get:
+      summary: List products (catalog-service)
+      responses:
+        "200":
+          description: All products
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Product" } }
+    post:
+      summary: Create a product (catalog-service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewProduct" }
+      responses:
+        "201":
+          description: The product created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "400": { description: Invalid body }
+  /products/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      summary: Product detail (catalog-service)
+      responses:
+        "200":
+          description: The product
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Product" }
+        "404": { description: No such product }
+    put:
+      summary: Replace a product, e.g. to change its price (catalog-service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewProduct" }
+      responses:
+        "200": { description: The updated product }
+        "404": { description: No such product }
+  /orders:
+    post:
+      summary: Place an order (order-service)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewOrder" }
+      responses:
+        "201":
+          description: The order, with product name and price copied into each line
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "400": { description: Invalid body (no lines, quantity not > 0, ...) }
+        "422": { description: A product in the order does not exist }
+        "503": { description: catalog-service does not answer within the timeout }
+  /orders/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer } }
+    get:
+      summary: Order detail (order-service)
+      responses:
+        "200":
+          description: The order
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Order" }
+        "404": { description: No such order }
+components:
+  schemas:
+    NewProduct:
+      type: object
+      required: [name, price_cents]
+      properties:
+        name: { type: string }
+        price_cents: { type: integer, minimum: 1 }
+        published: { type: boolean, default: false }
+    Product:
+      allOf:
+        - $ref: "#/components/schemas/NewProduct"
+        - type: object
+          properties:
+            id: { type: integer }
+    NewOrder:
+      type: object
+      required: [customer_id, lines]
+      properties:
+        customer_id: { type: string, example: C-001 }
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id: { type: integer }
+              quantity: { type: integer, minimum: 1 }
+    Order:
+      type: object
+      properties:
+        id: { type: integer }
+        customer_id: { type: string }
+        status: { type: string, example: PLACED }
+        created_at: { type: string, format: date-time }
+        total_cents: { type: integer }
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id: { type: integer }
+              product_name: { type: string, description: Copied at purchase time }
+              unit_price_cents: { type: integer, description: Copied at purchase time }
+              quantity: { type: integer }

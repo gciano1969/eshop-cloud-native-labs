@@ -1,0 +1,19 @@
+# One run of the pipeline. Create it with `oc create -f` (generateName), not `oc apply`.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: payment-ci-
+  labels: { app.kubernetes.io/part-of: eshop }
+spec:
+  pipelineRef: { name: payment-ci }
+  params:
+    - { name: repo-url, value: https://github.com/<your-github-user>/eshop-cloud-native-labs }
+    - { name: revision, value: main }
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  workspaces:
+    - name: source
+      volumeClaimTemplate:                # created with the run, deleted with it
+        spec:
+          accessModes: [ReadWriteOnce]
+          resources: { requests: { storage: 1Gi } }

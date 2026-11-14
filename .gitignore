@@ -1,0 +1,9 @@
+node_modules/
+npm-debug.log*
+.env
+.env.*
+# Real Secrets never go to Git: only secrets.example.yaml is tracked
+k8s/*secret*.yaml
+**/k8s/*secret*.yaml
+!**/k8s/secrets.example.yaml
+.DS_Store

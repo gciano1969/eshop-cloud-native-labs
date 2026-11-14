@@ -1,0 +1,9 @@
+# What the reconciler applies to the namespace. The `newTag` line is the one that changes at every release.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+images:
+  - name: payment-service
+    newName: image-registry.openshift-image-registry.svc:5000/<your-namespace>/payment-service
+    newTag: "<sha7>"          # the tag produced by the Tekton pipeline (Step 5)
